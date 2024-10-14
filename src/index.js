@@ -1,17 +1,19 @@
 // index.js
 module.exports = {
-  parsers: {
-    cfml: require("./cfml-parser"),
-  },
-  printers: {
-    htmlparser2: require("./cfml-printer"),
-  },
   languages: [
     {
-      name: "CFML",
+      name: "ColdFusion",
       parsers: ["cfml"],
       extensions: [".cfm", ".cfml"],
-      vscodeLanguageIds: ["cfml"],
     },
   ],
+  parsers: {
+    cfml: {
+      parse: (text) => ({ text }),
+      astFormat: "cfml",
+    },
+  },
+  printers: {
+    cfml: require("./cfml-printer"),
+  },
 };

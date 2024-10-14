@@ -1,135 +1,110 @@
 // cfml-printer.js
-const { doc } = require("prettier");
-const { builders } = doc;
-const { concat } = builders;
-
-// Define self-closing CFML tags
-const selfClosingCfmlTags = new Set([
-  "cfset",
-  "cfinclude",
-  "cfparam",
-  // Add other CFML self-closing tags as needed
-]);
-
-// Define standalone CFML tags that do not require closing tags but can have children
-const standaloneCfmlTags = new Set([
-  "cfelse",
-  "cfelseif",
-  // Add other standalone CFML tags if necessary
-]);
-
 module.exports = {
   print(path, options, print) {
-    const node = path.getValue();
+    const text = path.getValue().text;
 
-    switch (node.type) {
-      case "root":
-      case "document":
-        // Process all children of the root node
-        return concat(path.map(print, "children"));
+    const formattedText = safeFormatCFML(text);
 
-      case "text":
-        return node.data;
-
-      case "tag":
-        if (node.name === "cfml_closing_tag") {
-          // Output the closing tag
-          const tagName = node.attribs.name;
-          return `</${tagName}>`;
-        } else if (node.name.startsWith("cf")) {
-          const isSelfClosing = isSelfClosingTag(node);
-          const isStandalone = isStandaloneTag(node);
-          const tagOpen = `<${node.name}${formatAttributes(node.attribs)}${isSelfClosing ? " /" : ""}>`;
-
-          if (isSelfClosing) {
-            // Self-closing tag
-            return tagOpen;
-          } else {
-            // CFML tags that may have children
-            const children = node.children ? path.map(print, "children") : [];
-            return concat([tagOpen, ...children]);
-          }
-        } else {
-          // Regular HTML tag formatting
-          const isSelfClosing = isSelfClosingTag(node);
-          const tagOpen = `<${node.name}${formatAttributes(node.attribs)}${isSelfClosing ? " /" : ""}>`;
-
-          if (isSelfClosing) {
-            return tagOpen;
-          } else {
-            const children = node.children ? path.map(print, "children") : [];
-            const tagClose = `</${node.name}>`;
-            return concat([tagOpen, ...children, tagClose]);
-          }
-        }
-
-      case "script":
-      case "style":
-        // Handle <script> and <style> tags
-        const tagOpen = `<${node.name}${formatAttributes(node.attribs)}>`;
-        const tagClose = `</${node.name}>`;
-        const content = node.children ? path.map(print, "children") : [];
-        return concat([tagOpen, ...content, tagClose]);
-
-      case "comment":
-        // Handle comments
-        return `<!--${node.data}-->`;
-
-      case "directive":
-        // Handle directives like <!DOCTYPE html>
-        return `<!${node.data}>`;
-
-      case "cdata":
-        // Handle CDATA sections
-        return `<![CDATA[${node.data}]]>`;
-
-      default:
-        // Log unhandled node types for debugging
-        console.warn(`Unhandled node type: ${node.type}`, node);
-        return node.data || "";
+    // If the formatted text is shorter, text might have been removed
+    if (formattedText.length < text.length) {
+      // Abort formatting and return original text
+      return text;
     }
+
+    return formattedText;
   },
 };
 
-function formatAttributes(attribs) {
-  return Object.keys(attribs)
-    .map((key) => {
-      const value = attribs[key];
-      return value ? ` ${key}="${value}"` : ` ${key}`;
-    })
-    .join("");
-}
+function safeFormatCFML(text) {
+  const lines = text.split("\n");
+  const formattedLines = [];
+  const indentSize = 2; // Adjust this value as needed
 
-function isSelfClosingTag(node) {
-  const selfClosingCfmlTags = new Set([
-    "cfset",
-    "cfinclude",
-    "cfparam",
-    // Add other CFML self-closing tags as needed
-  ]);
-
-  const selfClosingHtmlTags = new Set([
+  const selfClosingTags = new Set([
+    // HTML self-closing tags
     "area",
     "base",
     "br",
     "col",
+    "command",
     "embed",
     "hr",
     "img",
     "input",
+    "keygen",
     "link",
     "meta",
     "param",
     "source",
     "track",
     "wbr",
+    // CFML self-closing tags
+    "cfset",
+    "cfinclude",
+    "cfparam",
   ]);
 
-  const tagName = node.name.toLowerCase();
-  return selfClosingCfmlTags.has(tagName) || selfClosingHtmlTags.has(tagName);
-}
+  const unindentTags = new Set(["cfelse", "cfelseif"]);
 
-function isStandaloneTag(node) {
-  const tagName = node.name.toLowerCase();
-  return standaloneCfmlTags.has(tagName);
+  let currentIndentLevel = 0;
+
+  for (let line of lines) {
+    let trimmedLine = line.trim();
+
+    // Regular expressions for matching tags
+    const tagMatch = /^\s*<\/?\s*([^\s>/]+)([^>]*)>/;
+    const tagMatchResult = tagMatch.exec(trimmedLine);
+    let tagName = "";
+    if (tagMatchResult) {
+      tagName = tagMatchResult[1].toLowerCase();
+    }
+
+    // Determine the tag type
+    const isClosingTag = /^\s*<\/[^>]+>\s*$/.test(trimmedLine);
+    const isSelfClosingTag =
+      selfClosingTags.has(tagName) || /^\s*<[^>]+\/>\s*$/.test(trimmedLine);
+    const isOpeningTag =
+      /^\s*<[^/!][^>]*?>\s*$/.test(trimmedLine) && !isSelfClosingTag;
+    const isSpecialTag = /^\s*<!|<!--|<\?/.test(trimmedLine);
+    const isOpeningAndClosingTag = /^\s*<[^>]+>.*<\/[^>]+>\s*$/.test(
+      trimmedLine
+    );
+    const isUnindentTag = unindentTags.has(tagName);
+
+    // Adjust currentIndentLevel before applying indentation
+    if (isClosingTag && !isOpeningAndClosingTag) {
+      currentIndentLevel = Math.max(currentIndentLevel - 1, 0);
+    } else if (isUnindentTag) {
+      currentIndentLevel = Math.max(currentIndentLevel - 1, 0);
+    }
+
+    // Apply indentation to the line
+    const indent = " ".repeat(currentIndentLevel * indentSize);
+    formattedLines.push(indent + trimmedLine);
+
+    // Adjust currentIndentLevel after applying indentation
+    if (
+      isOpeningTag &&
+      !isSelfClosingTag &&
+      !isSpecialTag &&
+      !isOpeningAndClosingTag &&
+      !isUnindentTag
+    ) {
+      currentIndentLevel++;
+    }
+
+    // If the unindent tag can have children, increase the indentation level
+    if (isUnindentTag) {
+      currentIndentLevel++;
+    }
+  }
+
+  const formattedText = formattedLines.join("\n");
+
+  // Ensure the formatted text is not shorter than the original
+  if (formattedText.length < text.length) {
+    return text;
+  }
+
+  return formattedText;
 }
