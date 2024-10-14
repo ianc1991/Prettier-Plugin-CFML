@@ -30,9 +30,9 @@ module.exports = {
   },
   astFormat: "htmlparser2",
   locStart(node) {
-    return node.startIndex || 0;
+    return 0;
   },
   locEnd(node) {
-    return node.endIndex || 0;
+    return 0;
   },
 };

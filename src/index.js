@@ -9,8 +9,13 @@ module.exports = {
   ],
   parsers: {
     cfml: {
-      parse: (text) => ({ text }),
+      parse: (text) => {
+        // Return an AST with the original text
+        return { type: "cfml-root", content: text };
+      },
       astFormat: "cfml",
+      locStart: () => 0,
+      locEnd: () => 0,
     },
   },
   printers: {

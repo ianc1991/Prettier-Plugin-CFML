@@ -1,30 +1,46 @@
 // cfml-printer.js
+const { builders } = require("prettier/doc");
+const { hardline, join } = builders;
+
 module.exports = {
   print(path, options, print) {
-    const text = path.getValue().text;
+    const node = path.getValue();
+    const text = node.content;
 
     const formattedText = safeFormatCFML(text);
 
-    // If the formatted text is shorter, text might have been removed
-    if (formattedText.length < text.length) {
-      // Abort formatting and return original text
-      return text;
-    }
+    // Split the formatted text into lines
+    const lines = formattedText.split("\n");
 
-    return formattedText;
+    // Create a doc by joining the lines with hardline
+    const doc = join(hardline, lines);
+
+    return doc;
   },
 };
 
 function safeFormatCFML(text) {
-  // Step 1: Preprocess the text to ensure CFML tags are on their own lines
+  // Step 1: Unindent all lines by trimming leading whitespace
+  const unindentedText = text
+    .split("\n")
+    .map((line) => line.trimStart())
+    .join("\n");
+
+  // Step 2: Preprocess the text to ensure CFML tags are on their own lines
   // Insert line breaks after CFML tags if they are not at the end of a line
-  text = text.replace(/(<\/?cf[^>]*>)([^\s\n])/gi, "$1\n$2");
+  let preprocessedText = unindentedText.replace(
+    /(<\/?cf[^>]*>)([^\s\n])/gi,
+    "$1\n$2"
+  );
 
   // Insert line breaks before CFML tags if they are not at the start of a line
-  text = text.replace(/([^\s\n])(<\/?cf[^>]*>)/gi, "$1\n$2");
+  preprocessedText = preprocessedText.replace(
+    /([^\s\n])(<\/?cf[^>]*>)/gi,
+    "$1\n$2"
+  );
 
   // Now split into lines
-  const lines = text.split("\n");
+  const lines = preprocessedText.split("\n");
   const formattedLines = [];
   const indentSize = 2; // Adjust this value as needed
 
@@ -78,8 +94,10 @@ function safeFormatCFML(text) {
     const isSelfClosingTag =
       selfClosingTags.has(tagName) || /^\s*<[^>]+\/>\s*$/.test(trimmedLine);
     const isOpeningTag =
-      /^\s*<[^/!][^>]*?>\s*$/.test(trimmedLine) && !isSelfClosingTag;
-    const isSpecialTag = /^\s*<!|<!--|<\?/.test(trimmedLine);
+      /^\s*<[^/!][^>]*?>\s*$/.test(trimmedLine) &&
+      !isSelfClosingTag &&
+      !isClosingTag;
+    const isSpecialTag = /^\s*<!|^\s*<!--|^\s*<\?/.test(trimmedLine);
     const isOpeningAndClosingTag = /^\s*<[^>]+>.*<\/[^>]+>\s*$/.test(
       trimmedLine
     );
@@ -116,9 +134,10 @@ function safeFormatCFML(text) {
   const formattedText = formattedLines.join("\n");
 
   // Ensure the formatted text is not shorter than the original
-  if (formattedText.length < text.length) {
-    return text;
-  }
+  // if (formattedText.length < text.length) {
+  //   console.warn("Negative space detected");
+  //   return text;
+  // }
 
   return formattedText;
 }
