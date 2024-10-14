@@ -1,7 +1,14 @@
 // cfml-printer.js
 const { doc } = require("prettier");
 const { builders } = doc;
-const { concat, hardline } = builders;
+const { concat } = builders;
+
+// Define standalone CFML tags that do not require closing tags but can have children
+const standaloneCfmlTags = new Set([
+  "cfelse",
+  "cfelseif",
+  // Add other standalone CFML tags if necessary
+]);
 
 module.exports = {
   print(path, options, print) {
@@ -9,7 +16,7 @@ module.exports = {
 
     switch (node.type) {
       case "root":
-      case "document": // Sometimes the root node may be of type 'document'
+      case "document":
         // Process all children of the root node
         return concat(path.map(print, "children"));
 
@@ -18,13 +25,19 @@ module.exports = {
 
       case "tag":
         if (node.name.startsWith("cf")) {
-          // Custom formatting for CFML tags
           const isSelfClosing = isSelfClosingTag(node);
+          const isStandalone = isStandaloneTag(node);
           const tagOpen = `<${node.name}${formatAttributes(node.attribs)}${isSelfClosing ? " /" : ""}>`;
 
           if (isSelfClosing) {
+            // Self-closing tag
             return tagOpen;
+          } else if (isStandalone) {
+            // Standalone tag (no closing tag, but can have children)
+            const children = node.children ? path.map(print, "children") : [];
+            return concat([tagOpen, ...children]);
           } else {
+            // Tag that requires a closing tag
             const children = node.children ? path.map(print, "children") : [];
             const tagClose = `</${node.name}>`;
             return concat([tagOpen, ...children, tagClose]);
@@ -48,7 +61,6 @@ module.exports = {
         // Handle <script> and <style> tags
         const tagOpen = `<${node.name}${formatAttributes(node.attribs)}>`;
         const tagClose = `</${node.name}>`;
-
         const content = node.children ? path.map(print, "children") : [];
         return concat([tagOpen, ...content, tagClose]);
 
@@ -82,12 +94,14 @@ function formatAttributes(attribs) {
 }
 
 function isSelfClosingTag(node) {
-  // Define self-closing tags here
-  const selfClosingTags = new Set([
+  const selfClosingCfmlTags = new Set([
     "cfset",
     "cfinclude",
     "cfparam",
     // Add other CFML self-closing tags as needed
+  ]);
+
+  const selfClosingHtmlTags = new Set([
     "area",
     "base",
     "br",
@@ -104,8 +118,11 @@ function isSelfClosingTag(node) {
     "wbr",
   ]);
 
-  return (
-    selfClosingTags.has(node.name.toLowerCase()) ||
-    (node.children && node.children.length === 0)
-  );
+  const tagName = node.name.toLowerCase();
+  return selfClosingCfmlTags.has(tagName) || selfClosingHtmlTags.has(tagName);
+}
+
+function isStandaloneTag(node) {
+  const tagName = node.name.toLowerCase();
+  return standaloneCfmlTags.has(tagName);
 }
