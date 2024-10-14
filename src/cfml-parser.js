@@ -7,6 +7,7 @@ module.exports = {
     const ast = parseDocument(text, {
       recognizeSelfClosing: true,
       lowerCaseTags: false,
+      lowerCaseAttributeNames: false,
       xmlMode: false, // Set to false to handle both HTML and CFML-style tags
     });
 

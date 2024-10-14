@@ -74,7 +74,10 @@ module.exports = {
 
 function formatAttributes(attribs) {
   return Object.keys(attribs)
-    .map((key) => ` ${key}="${attribs[key]}"`)
+    .map((key) => {
+      const value = attribs[key];
+      return value ? ` ${key}="${value}"` : ` ${key}`;
+    })
     .join("");
 }
 
