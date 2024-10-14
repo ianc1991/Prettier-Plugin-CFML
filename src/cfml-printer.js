@@ -16,6 +16,14 @@ module.exports = {
 };
 
 function safeFormatCFML(text) {
+  // Step 1: Preprocess the text to ensure CFML tags are on their own lines
+  // Insert line breaks after CFML tags if they are not at the end of a line
+  text = text.replace(/(<\/?cf[^>]*>)([^\s\n])/gi, "$1\n$2");
+
+  // Insert line breaks before CFML tags if they are not at the start of a line
+  text = text.replace(/([^\s\n])(<\/?cf[^>]*>)/gi, "$1\n$2");
+
+  // Now split into lines
   const lines = text.split("\n");
   const formattedLines = [];
   const indentSize = 2; // Adjust this value as needed
@@ -50,6 +58,12 @@ function safeFormatCFML(text) {
 
   for (let line of lines) {
     let trimmedLine = line.trim();
+
+    // Skip empty lines
+    if (trimmedLine.length === 0) {
+      formattedLines.push("");
+      continue;
+    }
 
     // Regular expressions for matching tags
     const tagMatch = /^\s*<\/?\s*([^\s>/]+)([^>]*)>/;
